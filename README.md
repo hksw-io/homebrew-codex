@@ -9,7 +9,7 @@ The official Homebrew `codex` cask is a good default if you only want stable rel
 - upstream is moving quickly and you want a dedicated mirror that checks for new releases every 5 minutes
 - you want alpha releases, which the official cask does not publish
 
-The official cask tracks stable `rust-v...` releases only. Upstream also ships prereleases such as `rust-v0.113.0-alpha.1`, which are intentionally out of scope there.
+The official Homebrew cask tracks stable `rust-v...` releases only. This tap also tracks upstream prereleases such as `rust-v0.113.0-alpha.1`.
 
 ## Install
 
