@@ -1,0 +1,18 @@
+[Unit]
+Description=Mirror upstream Codex releases into the HKSW Homebrew tap
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=__ENV_FILE__
+
+[Service]
+Type=oneshot
+User=__RUN_USER__
+Group=__RUN_GROUP__
+WorkingDirectory=__REPO_ROOT__
+Environment=HOME=__RUN_HOME__
+EnvironmentFile=__ENV_FILE__
+Environment=PYTHON3=__PYTHON3__
+ExecStart=__REPO_ROOT__/scripts/run_update.sh
+NoNewPrivileges=yes
+RestrictSUIDSGID=yes
+UMask=0077
