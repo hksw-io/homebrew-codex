@@ -1,6 +1,15 @@
-# HKSW Codex Tap
+# Homebrew Tap for Codex
 
-Homebrew tap for `openai/codex` with stable and alpha channels.
+Community-maintained Homebrew tap for stable and alpha Codex releases, mirrored from `openai/codex`.
+
+## Why This Exists
+
+The official Homebrew `codex` cask is a good default if you only want stable releases. This tap exists for two cases:
+
+- upstream is moving quickly and you want a dedicated mirror that checks for new releases every 5 minutes
+- you want alpha releases, which the official cask does not publish
+
+The official cask tracks stable `rust-v...` releases only. Upstream also ships prereleases such as `rust-v0.113.0-alpha.1`, which are intentionally out of scope there.
 
 ## Install
 
@@ -31,18 +40,20 @@ Notes:
 
 ## Channels
 
-- `codex` tracks the latest stable `rust-v...` release from `openai/codex`.
-- `codex@alpha` tracks the latest prerelease `rust-v...-alpha.N` release from `openai/codex`.
+| Channel | Tracks | Install |
+| --- | --- | --- |
+| Stable | Latest stable `rust-v...` release from `openai/codex` | `brew install --cask hksw-io/codex/codex` |
+| Alpha | Latest prerelease `rust-v...-alpha.N` release from `openai/codex` | `brew install --cask hksw-io/codex/codex@alpha` |
 
 ## How It Works
 
-This tap is mirrored from upstream GitHub Releases for `openai/codex`.
+This tap polls the upstream GitHub Releases API every 5 minutes and mirrors only `rust-v...` releases from `openai/codex`.
 
-The updater polls the upstream releases API every 5 minutes and only considers `rust-v...` tags. Each mirrored release becomes:
+Each mirrored release:
 
-1. a cask update in this repo,
-2. a matching git tag,
-3. a GitHub Release in `hksw-io/homebrew-codex`.
+- updates the relevant cask in this repo
+- creates a matching git tag
+- creates a GitHub Release in `hksw-io/homebrew-codex`
 
 ## Run It Yourself
 
