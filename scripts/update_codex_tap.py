@@ -238,23 +238,34 @@ def select_releases_for_sync(existing_tags: set[str], token: str | None) -> list
         return [release_from_api(latest_item)] if latest_item is not None else []
 
     pending_items: list[dict[str, Any]] = []
+    latest_known_published_at: str | None = None
     page = 1
     while True:
         batch = fetch_release_page(page, token)
         if not batch:
             break
-        page_has_known_tag = False
         for item in batch:
             tag_name = str(item["tag_name"])
             if tag_name in existing_tags:
-                page_has_known_tag = True
+                published_at = str(item["published_at"])
+                if latest_known_published_at is None or published_at > latest_known_published_at:
+                    latest_known_published_at = published_at
             else:
                 pending_items.append(item)
-        if page_has_known_tag:
+        if latest_known_published_at is not None and all(
+            str(item["published_at"]) <= latest_known_published_at for item in batch
+        ):
             break
         page += 1
 
-    pending = [release_from_api(item) for item in pending_items]
+    if latest_known_published_at is None:
+        return []
+
+    pending = [
+        release_from_api(item)
+        for item in pending_items
+        if str(item["published_at"]) > latest_known_published_at
+    ]
     pending.sort(key=lambda release: release.published_at)
     return pending
 
