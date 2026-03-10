@@ -101,6 +101,35 @@ class ReleaseParsingTests(unittest.TestCase):
             selected = updater.select_releases_for_sync(set(), None)
         self.assertEqual([release.tag_name for release in selected], ["rust-v0.114.0-alpha.1"])
 
+    def test_select_releases_for_sync_does_not_stop_at_first_known_tag(self) -> None:
+        first_page = [
+            updater.release_from_api(
+                self.make_release(
+                    tag_name="rust-v0.113.0",
+                    prerelease=False,
+                    published_at="2026-03-10T05:25:19Z",
+                )
+            ),
+            updater.release_from_api(
+                self.make_release(
+                    tag_name="rust-v0.114.0-alpha.1",
+                    prerelease=True,
+                    published_at="2026-03-10T06:54:03Z",
+                )
+            ),
+            updater.release_from_api(
+                self.make_release(
+                    tag_name="rust-v0.113.0-alpha.2",
+                    prerelease=True,
+                    published_at="2026-03-09T21:50:29Z",
+                )
+            ),
+        ]
+        existing_tags = {"rust-v0.113.0", "rust-v0.113.0-alpha.2", "rust-v0.113.0-alpha.1", "rust-v0.112.0"}
+        with mock.patch.object(updater, "fetch_release_page", side_effect=[first_page, []]):
+            pending = updater.select_releases_for_sync(existing_tags, None)
+        self.assertEqual([release.tag_name for release in pending], ["rust-v0.114.0-alpha.1"])
+
     def test_push_remote_url_does_not_embed_credentials(self) -> None:
         self.assertEqual(
             updater.push_remote_url(),
