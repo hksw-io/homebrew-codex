@@ -82,19 +82,15 @@ class ReleaseParsingTests(unittest.TestCase):
 
     def test_select_releases_for_sync_bootstrap_picks_highest_semver_release(self) -> None:
         first_page = [
-            updater.release_from_api(
-                self.make_release(
-                    tag_name="rust-v0.113.1",
-                    prerelease=False,
-                    published_at="2026-03-10T04:00:00Z",
-                )
+            self.make_release(
+                tag_name="rust-v0.113.1",
+                prerelease=False,
+                published_at="2026-03-10T04:00:00Z",
             ),
-            updater.release_from_api(
-                self.make_release(
-                    tag_name="rust-v0.114.0-alpha.1",
-                    prerelease=True,
-                    published_at="2026-03-09T04:00:00Z",
-                )
+            self.make_release(
+                tag_name="rust-v0.114.0-alpha.1",
+                prerelease=True,
+                published_at="2026-03-09T04:00:00Z",
             ),
         ]
         with mock.patch.object(updater, "fetch_release_page", side_effect=[first_page, []]):
@@ -103,42 +99,32 @@ class ReleaseParsingTests(unittest.TestCase):
 
     def test_select_releases_for_sync_does_not_stop_at_first_known_tag(self) -> None:
         first_page = [
-            updater.release_from_api(
-                self.make_release(
-                    tag_name="rust-v0.113.0",
-                    prerelease=False,
-                    published_at="2026-03-10T05:25:19Z",
-                )
+            self.make_release(
+                tag_name="rust-v0.113.0",
+                prerelease=False,
+                published_at="2026-03-10T05:25:19Z",
             ),
-            updater.release_from_api(
-                self.make_release(
-                    tag_name="rust-v0.114.0-alpha.1",
-                    prerelease=True,
-                    published_at="2026-03-10T06:54:03Z",
-                )
+            self.make_release(
+                tag_name="rust-v0.114.0-alpha.1",
+                prerelease=True,
+                published_at="2026-03-10T06:54:03Z",
             ),
-            updater.release_from_api(
-                self.make_release(
-                    tag_name="rust-v0.113.0-alpha.2",
-                    prerelease=True,
-                    published_at="2026-03-09T21:50:29Z",
-                )
+            self.make_release(
+                tag_name="rust-v0.113.0-alpha.2",
+                prerelease=True,
+                published_at="2026-03-09T21:50:29Z",
             ),
         ]
         second_page = [
-            updater.release_from_api(
-                self.make_release(
-                    tag_name="rust-v0.113.0-alpha.1",
-                    prerelease=True,
-                    published_at="2026-03-09T17:58:33Z",
-                )
+            self.make_release(
+                tag_name="rust-v0.113.0-alpha.1",
+                prerelease=True,
+                published_at="2026-03-09T17:58:33Z",
             ),
-            updater.release_from_api(
-                self.make_release(
-                    tag_name="rust-v0.112.0",
-                    prerelease=False,
-                    published_at="2026-03-09T17:58:31Z",
-                )
+            self.make_release(
+                tag_name="rust-v0.112.0",
+                prerelease=False,
+                published_at="2026-03-09T17:58:31Z",
             ),
         ]
         existing_tags = {"rust-v0.113.0", "rust-v0.113.0-alpha.2", "rust-v0.113.0-alpha.1", "rust-v0.112.0"}

@@ -144,15 +144,15 @@ def api_request(path: str, token: str | None, method: str = "GET", data: dict[st
     raise RuntimeError(f"GitHub API request kept failing for {path}") from last_error
 
 
-def fetch_release_page(page: int, token: str | None) -> list[ReleaseInfo]:
+def fetch_release_page(page: int, token: str | None) -> list[dict[str, Any]]:
     payload = api_request(f"/repos/{UPSTREAM_REPO}/releases?per_page=100&page={page}", token)
     assert isinstance(payload, list)
-    releases: list[ReleaseInfo] = []
+    releases: list[dict[str, Any]] = []
     for item in payload:
         tag_name = str(item.get("tag_name", ""))
         if not tag_name.startswith("rust-v"):
             continue
-        releases.append(release_from_api(item))
+        releases.append(item)
     return releases
 
 
@@ -220,34 +220,40 @@ def read_active_cask_version() -> str | None:
 
 def select_releases_for_sync(existing_tags: set[str], token: str | None) -> list[ReleaseInfo]:
     if not existing_tags:
-        latest_release: ReleaseInfo | None = None
+        latest_item: dict[str, Any] | None = None
+        latest_release_key: tuple[int, int, int, int, int] | None = None
         page = 1
         while True:
             batch = fetch_release_page(page, token)
             if not batch:
                 break
-            for release in batch:
-                if latest_release is None or release.version_key > latest_release.version_key:
-                    latest_release = release
+            for item in batch:
+                tag_name = str(item["tag_name"])
+                release_key = version_key(tag_name.removeprefix("rust-v"))
+                if latest_release_key is None or release_key > latest_release_key:
+                    latest_item = item
+                    latest_release_key = release_key
             page += 1
 
-        return [latest_release] if latest_release is not None else []
+        return [release_from_api(latest_item)] if latest_item is not None else []
 
-    pending: list[ReleaseInfo] = []
+    pending_items: list[dict[str, Any]] = []
     page = 1
     while True:
         batch = fetch_release_page(page, token)
         if not batch:
             break
         unseen_on_page = 0
-        for release in batch:
-            if release.tag_name not in existing_tags:
-                pending.append(release)
+        for item in batch:
+            tag_name = str(item["tag_name"])
+            if tag_name not in existing_tags:
+                pending_items.append(item)
                 unseen_on_page += 1
         if unseen_on_page == 0:
             break
         page += 1
 
+    pending = [release_from_api(item) for item in pending_items]
     pending.sort(key=lambda release: release.published_at)
     return pending
 
