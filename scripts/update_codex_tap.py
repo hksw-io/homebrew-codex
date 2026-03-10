@@ -307,6 +307,30 @@ def ensure_clean_worktree() -> None:
         raise RuntimeError("Refusing to run with a dirty working tree.")
 
 
+def ensure_repo_writable() -> None:
+    required_paths = [
+        REPO_ROOT / "Casks",
+        REPO_ROOT / "Casks" / "codex.rb",
+        REPO_ROOT / ".git" / "config",
+        REPO_ROOT / ".git" / "index",
+        REPO_ROOT / ".git" / "objects",
+        REPO_ROOT / ".git" / "refs" / "heads" / GIT_BRANCH,
+    ]
+    unwritable: list[str] = []
+
+    for path in required_paths:
+        target = path if path.exists() else path.parent
+        if not os.access(target, os.W_OK):
+            unwritable.append(str(path))
+
+    if unwritable:
+        joined = ", ".join(unwritable)
+        raise RuntimeError(
+            "Repository is not writable by the current user. "
+            f"Fix ownership or permissions for: {joined}"
+        )
+
+
 def git_config_value(key: str) -> str | None:
     result = git("config", "--get", key, check=False)
     if result.returncode != 0:
@@ -420,6 +444,7 @@ def create_github_release(release: ReleaseInfo, token: str, active_version: str,
 
 
 def sync_releases(dry_run: bool, verbose: bool) -> int:
+    ensure_repo_writable()
     configure_repo(verbose)
     ensure_clean_worktree()
 

@@ -171,6 +171,18 @@ class ReleaseParsingTests(unittest.TestCase):
                     with self.assertRaisesRegex(RuntimeError, "Git commit identity is not configured"):
                         updater.resolve_git_identity()
 
+    def test_ensure_repo_writable_passes_when_all_paths_are_writable(self) -> None:
+        with mock.patch("os.access", return_value=True):
+            updater.ensure_repo_writable()
+
+    def test_ensure_repo_writable_reports_unwritable_paths(self) -> None:
+        def fake_access(path: object, mode: int) -> bool:
+            return "codex.rb" not in str(path) and "refs/heads/master" not in str(path)
+
+        with mock.patch("os.access", side_effect=fake_access):
+            with self.assertRaisesRegex(RuntimeError, "Repository is not writable by the current user"):
+                updater.ensure_repo_writable()
+
 
 if __name__ == "__main__":
     unittest.main()
