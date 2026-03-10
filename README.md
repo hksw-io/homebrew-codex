@@ -1,49 +1,52 @@
 # Homebrew Tap for Codex
 
-Community-maintained Homebrew tap for stable and alpha Codex releases, mirrored from `openai/codex`.
+Community-maintained Homebrew tap that tracks the latest upstream Codex release, including prereleases.
 
 ## Why This Exists
 
 The official Homebrew `codex` cask is a good default if you only want stable releases. This tap exists for two cases:
 
 - upstream is moving quickly and you want a dedicated mirror that checks for new releases every 5 minutes
-- you want alpha releases, which the official cask does not publish
+- you want the highest upstream release by version, including alpha releases that the official cask does not publish
 
-The official Homebrew cask tracks stable `rust-v...` releases only. This tap also tracks upstream prereleases such as `rust-v0.113.0-alpha.1`.
+The official Homebrew cask tracks stable `rust-v...` releases only. This tap tracks the highest upstream `rust-v...` version by SemVer precedence, whether that release is stable or a prerelease such as `rust-v0.113.0-alpha.1`.
 
 ## Install
 
-Stable:
-
 ```sh
 brew install --cask hksw-io/codex/codex
-```
-
-Alpha:
-
-```sh
-brew install --cask hksw-io/codex/codex@alpha
 ```
 
 Upgrade:
 
 ```sh
 brew upgrade --cask hksw-io/codex/codex
-brew upgrade --cask hksw-io/codex/codex@alpha
 ```
 
 Notes:
 
 - `hksw-io/codex` is the tap name, not the install target.
 - `brew install --cask codex` installs the official Homebrew cask, not this tap.
-- `codex` and `codex@alpha` both install the `codex` binary, so they conflict with each other.
+- This tap's `codex` cask may point to either a stable release or a prerelease, depending on which upstream version is highest.
 
-## Channels
+If you previously installed `codex@alpha`, migrate with:
 
-| Channel | Tracks | Install |
-| --- | --- | --- |
-| Stable | Latest stable `rust-v...` release from `openai/codex` | `brew install --cask hksw-io/codex/codex` |
-| Alpha | Latest prerelease `rust-v...-alpha.N` release from `openai/codex` | `brew install --cask hksw-io/codex/codex@alpha` |
+```sh
+brew uninstall --cask hksw-io/codex/codex@alpha
+brew install --cask hksw-io/codex/codex
+```
+
+## Version Policy
+
+This tap keeps a single active cask, `codex`, and points it at the highest upstream `rust-v...` release by SemVer precedence.
+
+Examples:
+
+- `0.113.0` supersedes `0.113.0-alpha.2`
+- `0.114.0-alpha.1` supersedes `0.113.1`
+- `0.114.0` supersedes `0.114.0-alpha.1`
+
+If you want stable-only behavior, use the official Homebrew `codex` cask instead of this tap.
 
 ## How It Works
 
@@ -51,9 +54,9 @@ This tap polls the upstream GitHub Releases API every 5 minutes and mirrors only
 
 Each mirrored release:
 
-- updates the relevant cask in this repo
 - creates a matching git tag
 - creates a GitHub Release in `hksw-io/homebrew-codex`
+- updates `Casks/codex.rb` only if that upstream release becomes the highest version seen so far
 
 ## Run It Yourself
 
@@ -84,6 +87,8 @@ Run the updater once:
 ```sh
 ./scripts/run_update.sh --dry-run --verbose
 ```
+
+The updater mirrors every upstream `rust-v...` release, but only changes `codex.rb` when that release outranks the currently active version.
 
 Run the tests:
 

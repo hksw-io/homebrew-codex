@@ -14,14 +14,12 @@ cask "codex" do
   homepage "https://github.com/openai/codex"
 
   livecheck do
-    url :url
-    regex(/^rust-v?(\d+(?:\.\d+)+)$/i)
-    strategy :github_latest
+    url "https://github.com/openai/codex/releases"
+    regex(/^rust-v?(\d+(?:\.\d+)+(?:-alpha\.\d+)?)$/i)
+    strategy :github_releases
   end
 
   depends_on formula: "ripgrep"
-
-  conflicts_with cask: "codex@alpha"
 
   binary "codex-#{arch}-#{os}", target: "codex"
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -30,6 +31,8 @@ REQUIRED_ASSETS = {
     "arm64_linux": "codex-aarch64-unknown-linux-musl.tar.gz",
     "x86_64_linux": "codex-x86_64-unknown-linux-musl.tar.gz",
 }
+VERSION_RE = re.compile(r"^(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)(?:-alpha\.(?P<alpha>\d+))?$")
+CASK_VERSION_RE = re.compile(r'^\s*version "([^"]+)"', re.MULTILINE)
 
 
 @dataclass(frozen=True)
@@ -42,17 +45,20 @@ class ReleaseInfo:
     sha256: dict[str, str]
 
     @property
-    def channel(self) -> str:
-        return "alpha" if self.prerelease else "stable"
+    def release_type(self) -> str:
+        return "prerelease" if self.prerelease else "stable"
 
     @property
     def cask_token(self) -> str:
-        return "codex@alpha" if self.prerelease else "codex"
+        return "codex"
 
     @property
     def cask_path(self) -> Path:
-        filename = "codex@alpha.rb" if self.prerelease else "codex.rb"
-        return REPO_ROOT / "Casks" / filename
+        return REPO_ROOT / "Casks" / "codex.rb"
+
+    @property
+    def version_key(self) -> tuple[int, int, int, int, int]:
+        return version_key(self.version)
 
 
 def parse_args() -> argparse.Namespace:
@@ -175,25 +181,57 @@ def release_from_api(item: dict[str, Any]) -> ReleaseInfo:
     )
 
 
+def version_key(version: str) -> tuple[int, int, int, int, int]:
+    match = VERSION_RE.fullmatch(version)
+    if match is None:
+        raise ValueError(f"Unsupported Codex release version: {version}")
+
+    major = int(match.group("major"))
+    minor = int(match.group("minor"))
+    patch = int(match.group("patch"))
+    alpha = match.group("alpha")
+
+    if alpha is None:
+        return (major, minor, patch, 1, 0)
+
+    return (major, minor, patch, 0, int(alpha))
+
+
+def release_outranks_active(release: ReleaseInfo, active_version: str | None) -> bool:
+    if active_version is None:
+        return True
+    return release.version_key > version_key(active_version)
+
+
+def read_active_cask_version() -> str | None:
+    path = REPO_ROOT / "Casks" / "codex.rb"
+    if not path.exists():
+        return None
+
+    content = path.read_text(encoding="utf-8")
+    match = CASK_VERSION_RE.search(content)
+    if match is None:
+        raise RuntimeError("Could not determine the active codex cask version.")
+
+    version = match.group(1)
+    version_key(version)
+    return version
+
+
 def select_releases_for_sync(existing_tags: set[str], token: str | None) -> list[ReleaseInfo]:
     if not existing_tags:
-        latest_stable: ReleaseInfo | None = None
-        latest_alpha: ReleaseInfo | None = None
+        latest_release: ReleaseInfo | None = None
         page = 1
-        while latest_stable is None or latest_alpha is None:
+        while True:
             batch = fetch_release_page(page, token)
             if not batch:
                 break
             for release in batch:
-                if latest_stable is None and not release.prerelease:
-                    latest_stable = release
-                if latest_alpha is None and release.prerelease:
-                    latest_alpha = release
+                if latest_release is None or release.version_key > latest_release.version_key:
+                    latest_release = release
             page += 1
 
-        selected = [release for release in (latest_stable, latest_alpha) if release is not None]
-        selected.sort(key=lambda release: release.published_at)
-        return selected
+        return [latest_release] if latest_release is not None else []
 
     pending: list[ReleaseInfo] = []
     page = 1
@@ -216,21 +254,6 @@ def select_releases_for_sync(existing_tags: set[str], token: str | None) -> list
 
 
 def render_cask(release: ReleaseInfo) -> str:
-    if release.prerelease:
-        livecheck = """  livecheck do
-    url "https://github.com/openai/codex/releases"
-    regex(/^rust-v?(\\d+(?:\\.\\d+)+-alpha\\.\\d+)$/i)
-    strategy :github_releases
-  end"""
-        conflicts = '  conflicts_with cask: "codex"'
-    else:
-        livecheck = """  livecheck do
-    url :url
-    regex(/^rust-v?(\\d+(?:\\.\\d+)+)$/i)
-    strategy :github_latest
-  end"""
-        conflicts = '  conflicts_with cask: "codex@alpha"'
-
     return f"""cask "{release.cask_token}" do
   arch arm: "aarch64", intel: "x86_64"
   os macos: "apple-darwin", linux: "unknown-linux-musl"
@@ -246,11 +269,13 @@ def render_cask(release: ReleaseInfo) -> str:
   desc "OpenAI's coding agent that runs in your terminal"
   homepage "https://github.com/openai/codex"
 
-{livecheck}
+  livecheck do
+    url "https://github.com/openai/codex/releases"
+    regex(/^rust-v?(\\d+(?:\\.\\d+)+(?:-alpha\\.\\d+)?)$/i)
+    strategy :github_releases
+  end
 
   depends_on formula: "ripgrep"
-
-{conflicts}
 
   binary "codex-#{{arch}}-#{{os}}", target: "codex"
 
@@ -346,26 +371,27 @@ def push_updates(tag_name: str, token: str, push_branch: bool, verbose: bool) ->
     debug(verbose, f"Pushed {tag_name} to GitHub.")
 
 
-def release_body(release: ReleaseInfo) -> str:
-    channel = "alpha" if release.prerelease else "stable"
+def release_body(release: ReleaseInfo, *, active_version: str, cask_updated: bool) -> str:
     return "\n".join(
         [
             f"Tap mirror of upstream release `{release.tag_name}`.",
             "",
-            f"- Channel: {channel}",
+            f"- Upstream release type: {release.release_type}",
             f"- Upstream release: {release.html_url}",
             f"- Published upstream: {release.published_at}",
-            f"- Cask: `{release.cask_token}`",
+            f"- Active cask: `{release.cask_token}`",
+            f"- Active cask updated: {'yes' if cask_updated else 'no'}",
+            f"- Active cask version after sync: `{active_version}`",
         ]
     )
 
 
-def create_github_release(release: ReleaseInfo, token: str, verbose: bool) -> None:
+def create_github_release(release: ReleaseInfo, token: str, active_version: str, cask_updated: bool, verbose: bool) -> None:
     payload = {
         "tag_name": release.tag_name,
         "target_commitish": GIT_BRANCH,
         "name": release.version,
-        "body": release_body(release),
+        "body": release_body(release, active_version=active_version, cask_updated=cask_updated),
         "draft": False,
         "prerelease": release.prerelease,
     }
@@ -381,6 +407,7 @@ def sync_releases(dry_run: bool, verbose: bool) -> int:
     ensure_clean_worktree()
 
     tags = existing_upstream_tags()
+    active_version = read_active_cask_version()
     pending = select_releases_for_sync(tags, GH_TOKEN)
     if not pending:
         log("No new upstream releases.")
@@ -388,13 +415,23 @@ def sync_releases(dry_run: bool, verbose: bool) -> int:
 
     log(f"Processing {len(pending)} upstream release(s).")
     for release in pending:
-        log(f"Mirroring {release.tag_name} ({release.channel}).")
+        log(f"Mirroring {release.tag_name} ({release.release_type}).")
         path = release.cask_path
         changed = False
         tag_exists = release.tag_name in tags
+        cask_updated = False
+        should_promote = release_outranks_active(release, active_version)
 
         if not dry_run:
-            changed = stage_and_commit(path, release, verbose)
+            if should_promote:
+                changed = stage_and_commit(path, release, verbose)
+                active_version = release.version
+                cask_updated = changed
+            else:
+                debug(
+                    verbose,
+                    f"{release.tag_name} does not outrank active codex {active_version}; leaving codex.rb unchanged.",
+                )
             if not tag_exists:
                 create_tag(release.tag_name, verbose)
                 tags.add(release.tag_name)
@@ -403,15 +440,27 @@ def sync_releases(dry_run: bool, verbose: bool) -> int:
                 raise RuntimeError("GH_TOKEN or GITHUB_TOKEN is required for push/release operations.")
 
             push_updates(release.tag_name, GH_TOKEN, push_branch=changed, verbose=verbose)
-            create_github_release(release, GH_TOKEN, verbose)
+            if active_version is None:
+                raise RuntimeError("No active codex version is available after sync.")
+            create_github_release(release, GH_TOKEN, active_version, cask_updated, verbose)
         else:
-            old_content = path.read_text(encoding="utf-8") if path.exists() else ""
-            if old_content != render_cask(release):
-                changed = True
-            log(f"dry-run: would {'update' if changed else 'reuse'} {path.name}")
+            if should_promote:
+                old_content = path.read_text(encoding="utf-8") if path.exists() else ""
+                if old_content != render_cask(release):
+                    changed = True
+                active_version = release.version
+                cask_updated = changed
+                log(f"dry-run: would {'update' if changed else 'reuse'} {path.name}")
+            else:
+                log(f"dry-run: would keep {path.name} at {active_version}")
             if not tag_exists:
                 log(f"dry-run: would create tag {release.tag_name}")
-            log(f"dry-run: would create GitHub Release {release.tag_name}")
+            if active_version is None:
+                raise RuntimeError("No active codex version is available after dry-run planning.")
+            log(
+                f"dry-run: would create GitHub Release {release.tag_name} "
+                f"(active cask updated: {'yes' if cask_updated else 'no'})"
+            )
 
     return 0
 

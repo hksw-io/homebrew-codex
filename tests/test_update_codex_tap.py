@@ -30,7 +30,7 @@ class ReleaseParsingTests(unittest.TestCase):
             "assets": assets,
         }
 
-    def test_release_from_api_extracts_version_channel_and_digests(self) -> None:
+    def test_release_from_api_extracts_version_release_type_and_digests(self) -> None:
         release = updater.release_from_api(
             self.make_release(
                 tag_name="rust-v0.113.0-alpha.1",
@@ -39,35 +39,67 @@ class ReleaseParsingTests(unittest.TestCase):
             )
         )
         self.assertEqual(release.version, "0.113.0-alpha.1")
-        self.assertEqual(release.channel, "alpha")
-        self.assertEqual(release.cask_token, "codex@alpha")
+        self.assertEqual(release.release_type, "prerelease")
+        self.assertEqual(release.cask_token, "codex")
         self.assertEqual(sorted(release.sha256), sorted(updater.REQUIRED_ASSETS))
 
-    def test_render_cask_for_stable_contains_conflict_and_livecheck(self) -> None:
+    def test_version_key_orders_stable_after_same_base_alpha(self) -> None:
+        self.assertGreater(
+            updater.version_key("0.113.0"),
+            updater.version_key("0.113.0-alpha.2"),
+        )
+
+    def test_version_key_orders_higher_minor_alpha_after_lower_stable(self) -> None:
+        self.assertGreater(
+            updater.version_key("0.114.0-alpha.1"),
+            updater.version_key("0.113.1"),
+        )
+
+    def test_release_outranks_active_uses_semver_precedence(self) -> None:
         release = updater.release_from_api(
             self.make_release(
-                tag_name="rust-v0.112.0",
-                prerelease=False,
+                tag_name="rust-v0.114.0-alpha.1",
+                prerelease=True,
                 published_at="2026-03-08T20:44:14Z",
             )
         )
-        content = updater.render_cask(release)
-        self.assertIn('cask "codex"', content)
-        self.assertIn('conflicts_with cask: "codex@alpha"', content)
-        self.assertIn("strategy :github_latest", content)
+        self.assertTrue(updater.release_outranks_active(release, "0.113.1"))
+        self.assertFalse(updater.release_outranks_active(release, "0.114.0"))
 
-    def test_render_cask_for_alpha_contains_alpha_regex(self) -> None:
+    def test_render_cask_tracks_stable_and_alpha_tags(self) -> None:
         release = updater.release_from_api(
             self.make_release(
-                tag_name="rust-v0.113.0-alpha.1",
-                prerelease=True,
+                tag_name="rust-v0.113.0",
+                prerelease=False,
                 published_at="2026-03-09T01:22:30Z",
             )
         )
         content = updater.render_cask(release)
-        self.assertIn('cask "codex@alpha"', content)
-        self.assertIn('-alpha\\.\\d+', content)
-        self.assertIn('conflicts_with cask: "codex"', content)
+        self.assertIn('cask "codex"', content)
+        self.assertIn("(?:-alpha\\.\\d+)?", content)
+        self.assertIn("strategy :github_releases", content)
+        self.assertNotIn("conflicts_with", content)
+
+    def test_select_releases_for_sync_bootstrap_picks_highest_semver_release(self) -> None:
+        first_page = [
+            updater.release_from_api(
+                self.make_release(
+                    tag_name="rust-v0.113.1",
+                    prerelease=False,
+                    published_at="2026-03-10T04:00:00Z",
+                )
+            ),
+            updater.release_from_api(
+                self.make_release(
+                    tag_name="rust-v0.114.0-alpha.1",
+                    prerelease=True,
+                    published_at="2026-03-09T04:00:00Z",
+                )
+            ),
+        ]
+        with mock.patch.object(updater, "fetch_release_page", side_effect=[first_page, []]):
+            selected = updater.select_releases_for_sync(set(), None)
+        self.assertEqual([release.tag_name for release in selected], ["rust-v0.114.0-alpha.1"])
 
     def test_push_remote_url_does_not_embed_credentials(self) -> None:
         self.assertEqual(
@@ -79,25 +111,25 @@ class ReleaseParsingTests(unittest.TestCase):
         with mock.patch.dict(
             os.environ,
             {
-                "GIT_USER_NAME": "Robin Hallabro-Kokko",
-                "GIT_USER_EMAIL": "robin@hallabro-kokko.se",
+                "GIT_USER_NAME": "Test User",
+                "GIT_USER_EMAIL": "test@example.com",
             },
             clear=False,
         ):
-            with mock.patch.object(updater, "GIT_USER_NAME", "Robin Hallabro-Kokko"):
-                with mock.patch.object(updater, "GIT_USER_EMAIL", "robin@hallabro-kokko.se"):
+            with mock.patch.object(updater, "GIT_USER_NAME", "Test User"):
+                with mock.patch.object(updater, "GIT_USER_EMAIL", "test@example.com"):
                     self.assertEqual(
                         updater.resolve_git_identity(),
-                        ("Robin Hallabro-Kokko", "robin@hallabro-kokko.se"),
+                        ("Test User", "test@example.com"),
                     )
 
     def test_resolve_git_identity_falls_back_to_git_config(self) -> None:
         with mock.patch.object(updater, "GIT_USER_NAME", None):
             with mock.patch.object(updater, "GIT_USER_EMAIL", None):
-                with mock.patch.object(updater, "git_config_value", side_effect=["Robin Hallabro-Kokko", "robin@hallabro-kokko.se"]):
+                with mock.patch.object(updater, "git_config_value", side_effect=["Test User", "test@example.com"]):
                     self.assertEqual(
                         updater.resolve_git_identity(),
-                        ("Robin Hallabro-Kokko", "robin@hallabro-kokko.se"),
+                        ("Test User", "test@example.com"),
                     )
 
     def test_resolve_git_identity_requires_complete_identity(self) -> None:
