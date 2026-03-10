@@ -243,13 +243,14 @@ def select_releases_for_sync(existing_tags: set[str], token: str | None) -> list
         batch = fetch_release_page(page, token)
         if not batch:
             break
-        unseen_on_page = 0
+        page_has_known_tag = False
         for item in batch:
             tag_name = str(item["tag_name"])
-            if tag_name not in existing_tags:
+            if tag_name in existing_tags:
+                page_has_known_tag = True
+            else:
                 pending_items.append(item)
-                unseen_on_page += 1
-        if unseen_on_page == 0:
+        if page_has_known_tag:
             break
         page += 1
 
