@@ -23,6 +23,14 @@ Upgrade:
 brew upgrade --cask hksw-io/codex/codex
 ```
 
+If you want a single Homebrew upgrade command that also includes greedy casks, set:
+
+```sh
+export HOMEBREW_UPGRADE_GREEDY=1
+```
+
+Then plain `brew upgrade` will include them.
+
 Notes:
 
 - `hksw-io/codex` is the tap name, not the install target.
