@@ -37,13 +37,6 @@ Notes:
 - `brew install --cask codex` installs the official Homebrew cask, not this tap.
 - This tap's `codex` cask may point to either a stable release or a prerelease, depending on which upstream version is highest.
 
-If you previously installed `codex@alpha`, migrate with:
-
-```sh
-brew uninstall --cask hksw-io/codex/codex@alpha
-brew install --cask hksw-io/codex/codex
-```
-
 ## Version Policy
 
 This tap keeps a single active cask, `codex`, and points it at the highest upstream `rust-v...` release by SemVer precedence.
