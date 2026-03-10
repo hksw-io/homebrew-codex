@@ -239,9 +239,13 @@ def select_releases_for_sync(existing_tags: set[str], token: str | None) -> list
         batch = fetch_release_page(page, token)
         if not batch:
             break
+        unseen_on_page = 0
         for release in batch:
             if release.tag_name not in existing_tags:
                 pending.append(release)
+                unseen_on_page += 1
+        if unseen_on_page == 0:
+            break
         page += 1
 
     pending.sort(key=lambda release: release.published_at)
