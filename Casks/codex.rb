@@ -2,11 +2,11 @@ cask "codex" do
   arch arm: "aarch64", intel: "x86_64"
   os macos: "apple-darwin", linux: "unknown-linux-musl"
 
-  version "0.117.0-alpha.19"
-  sha256 arm:          "2dfa178f850f1971fe7e672b7bc43e809701abb67eefc6f38b421744bfe50198",
-         intel:        "b752f579579911f7027c2566e296d799b4c46e14780002b98e47b4c497523cfd",
-         arm64_linux:  "4249d4e1c2203b60b977f0588647c5ad8936e2c8f83da0d39eb3629d9fafe74a",
-         x86_64_linux: "51802adea4adaff69ae5b13e224523b6b6468bef1c2cd1762415e14ad9872f4e"
+  version "0.117.0-alpha.20"
+  sha256 arm:          "d1f22f9c2a7f7dd1948b941eb08ce0a851f6368cac2e5b3f1b9b0060f5c39cd5",
+         intel:        "99e2cf4f3909c890a9a702e2c8485d133fa0b58f962474ead9294519df498433",
+         arm64_linux:  "99f6e1a7d0918c751e43887ff924fa02dd9ee5fd26d86f20848114f73efb795e",
+         x86_64_linux: "72c2375a50ecddf26d0a77d5a374708c46cab0023173d9e9924cdcc293fbde1b"
 
   url "https://github.com/openai/codex/releases/download/rust-v#{version}/codex-#{arch}-#{os}.tar.gz"
   name "Codex"
