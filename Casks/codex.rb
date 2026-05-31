@@ -1,5 +1,5 @@
 cask "codex" do
-  version "0.133.0"
+  version "0.134.0-alpha.1"
   name "Codex"
   desc "OpenAI's coding agent that runs in your terminal"
   homepage "https://github.com/openai/codex"
@@ -14,20 +14,20 @@ cask "codex" do
 
   if OS.mac?
     if Hardware::CPU.arm?
-      sha256 "13c78362beff814b7dde16ed756376236777669869dde44bd232673500df6853"
+      sha256 "5537d0dc0e50d9e1beea199f8a61bf2b3a5407accc6aefa3dd8e19c953a77f18"
       url "https://github.com/openai/codex/releases/download/rust-v#{version}/codex-aarch64-apple-darwin.tar.gz"
       binary "codex-aarch64-apple-darwin", target: "codex"
     else
-      sha256 "2b91bd54f0520dc994b5c322769280f94f1c227fdb35dd55f924eac8e2247b91"
+      sha256 "5ace5876061476026b0b768bac2d4e9eed7e1b28f2044a0242ae10086ac3c435"
       url "https://github.com/openai/codex/releases/download/rust-v#{version}/codex-x86_64-apple-darwin.tar.gz"
       binary "codex-x86_64-apple-darwin", target: "codex"
     end
   elsif Hardware::CPU.arm?
-    sha256 "268bfe8cf8154940fea256df75cd441c54a0c71e6c8ccd45ab3f76ff28ba1413"
+    sha256 "a2b758a2abc59da05ad11ba0d5c2944976b45befb897e3676816cd6dc83af751"
     url "https://github.com/openai/codex/releases/download/rust-v#{version}/codex-aarch64-unknown-linux-musl.tar.gz"
     binary "codex-aarch64-unknown-linux-musl", target: "codex"
   else
-    sha256 "d06019ab9c35d281b78dc2ebb2ae55c2bb97ea11bf7f452bafe390eddb0034ef"
+    sha256 "43535a5c0ab0f4ce572b08d127cf0180c8d1813d8529188d1ef22065060d7963"
     url "https://github.com/openai/codex/releases/download/rust-v#{version}/codex-x86_64-unknown-linux-musl.tar.gz"
     binary "codex-x86_64-unknown-linux-musl", target: "codex"
   end
