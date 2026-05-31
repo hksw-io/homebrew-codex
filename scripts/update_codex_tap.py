@@ -26,10 +26,16 @@ GIT_USER_EMAIL = os.environ.get("GIT_USER_EMAIL")
 API_BASE = "https://api.github.com"
 
 REQUIRED_ASSETS = {
-    "arm": "codex-aarch64-apple-darwin.tar.gz",
-    "intel": "codex-x86_64-apple-darwin.tar.gz",
-    "arm64_linux": "codex-aarch64-unknown-linux-musl.tar.gz",
-    "x86_64_linux": "codex-x86_64-unknown-linux-musl.tar.gz",
+    "arm": (
+        "codex-aarch64-apple-darwin.tar.gz",
+        "codex-aarch64-apple-darwin-unsigned.tar.gz",
+    ),
+    "intel": (
+        "codex-x86_64-apple-darwin.tar.gz",
+        "codex-x86_64-apple-darwin-unsigned.tar.gz",
+    ),
+    "arm64_linux": ("codex-aarch64-unknown-linux-musl.tar.gz",),
+    "x86_64_linux": ("codex-x86_64-unknown-linux-musl.tar.gz",),
 }
 VERSION_RE = re.compile(r"^(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)(?:-alpha\.(?P<alpha>\d+))?$")
 CASK_VERSION_RE = re.compile(r'^\s*version "([^"]+)"', re.MULTILINE)
@@ -162,10 +168,12 @@ def release_from_api(item: dict[str, Any]) -> ReleaseInfo:
         raise ValueError(f"Unexpected upstream tag format: {tag_name}")
 
     asset_digests: dict[str, str] = {}
-    for key, asset_name in REQUIRED_ASSETS.items():
-        asset = next((candidate for candidate in item["assets"] if candidate["name"] == asset_name), None)
+    for key, asset_names in REQUIRED_ASSETS.items():
+        asset = next((candidate for candidate in item["assets"] if candidate["name"] in asset_names), None)
         if asset is None:
-            raise ValueError(f"Release {tag_name} is missing required asset {asset_name}")
+            accepted_names = ", ".join(asset_names)
+            raise ValueError(f"Release {tag_name} is missing required asset variant for {key}: {accepted_names}")
+        asset_name = str(asset["name"])
         digest = str(asset.get("digest", ""))
         if not digest.startswith("sha256:"):
             raise ValueError(f"Release {tag_name} has no sha256 digest for {asset_name}")

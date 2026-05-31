@@ -14,10 +14,10 @@ import update_codex_tap as updater  # noqa: E402
 class ReleaseParsingTests(unittest.TestCase):
     def make_release(self, *, tag_name: str, prerelease: bool, published_at: str) -> dict:
         assets = []
-        for digest_key, asset_name in updater.REQUIRED_ASSETS.items():
+        for digest_key, asset_names in updater.REQUIRED_ASSETS.items():
             assets.append(
                 {
-                    "name": asset_name,
+                    "name": asset_names[0],
                     "digest": f"sha256:{digest_key * 8}"[:71],
                 }
             )
@@ -41,6 +41,22 @@ class ReleaseParsingTests(unittest.TestCase):
         self.assertEqual(release.version, "0.113.0-alpha.1")
         self.assertEqual(release.release_type, "prerelease")
         self.assertEqual(release.cask_token, "codex")
+        self.assertEqual(sorted(release.sha256), sorted(updater.REQUIRED_ASSETS))
+
+    def test_release_from_api_accepts_unsigned_macos_assets(self) -> None:
+        release_item = self.make_release(
+            tag_name="rust-v0.136.0-alpha.2",
+            prerelease=True,
+            published_at="2026-05-31T01:22:30Z",
+        )
+        for asset in release_item["assets"]:
+            if asset["name"] == "codex-aarch64-apple-darwin.tar.gz":
+                asset["name"] = "codex-aarch64-apple-darwin-unsigned.tar.gz"
+            if asset["name"] == "codex-x86_64-apple-darwin.tar.gz":
+                asset["name"] = "codex-x86_64-apple-darwin-unsigned.tar.gz"
+
+        release = updater.release_from_api(release_item)
+        self.assertEqual(release.version, "0.136.0-alpha.2")
         self.assertEqual(sorted(release.sha256), sorted(updater.REQUIRED_ASSETS))
 
     def test_version_key_orders_stable_after_same_base_alpha(self) -> None:
