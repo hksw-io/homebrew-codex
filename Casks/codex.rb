@@ -1,14 +1,5 @@
 cask "codex" do
-  arch arm: "aarch64", intel: "x86_64"
-  os macos: "apple-darwin", linux: "unknown-linux-musl"
-
-  version "0.132.0-alpha.1"
-  sha256 arm:          "905bbc4d77285392561e9582cc40dbba1b219a9488a81a8de732af42d0393259",
-         intel:        "97e65ad3a36a0cf77d35ffb3a5dc7814713b3d77b3ea8142a6c71bd58d4d2094",
-         arm64_linux:  "f6cd4ae2b66b05721e33b210508b63311fca77994a687a24f1f9d253a806a88c",
-         x86_64_linux: "bcccaa6ee11c896ea55a83295ae90ce94fba9ad8b0c870e71e7d9c9cc3dde7d5"
-
-  url "https://github.com/openai/codex/releases/download/rust-v#{version}/codex-#{arch}-#{os}.tar.gz"
+  version "0.132.0"
   name "Codex"
   desc "OpenAI's coding agent that runs in your terminal"
   homepage "https://github.com/openai/codex"
@@ -21,7 +12,25 @@ cask "codex" do
 
   depends_on formula: "ripgrep"
 
-  binary "codex-#{arch}-#{os}", target: "codex"
+  if OS.mac?
+    if Hardware::CPU.arm?
+      sha256 "73258e01c122941c21bb8afbb81daff2ffdd8d3e803754fd411340c24257fdce"
+      url "https://github.com/openai/codex/releases/download/rust-v#{version}/codex-aarch64-apple-darwin.tar.gz"
+      binary "codex-aarch64-apple-darwin", target: "codex"
+    else
+      sha256 "58acad9af4f3b6dbabf6a1255baeac2384310b208d8b14a8899772cc72f99ea1"
+      url "https://github.com/openai/codex/releases/download/rust-v#{version}/codex-x86_64-apple-darwin.tar.gz"
+      binary "codex-x86_64-apple-darwin", target: "codex"
+    end
+  elsif Hardware::CPU.arm?
+    sha256 "ae80a8ffb41abfca4eba9746cd3ba90403d57b02bdbcd68455f560890ad9f440"
+    url "https://github.com/openai/codex/releases/download/rust-v#{version}/codex-aarch64-unknown-linux-musl.tar.gz"
+    binary "codex-aarch64-unknown-linux-musl", target: "codex"
+  else
+    sha256 "8b64432ee4ef5b1d7d197aad4535a276bc85223f4e4163769c0e1015cda883b2"
+    url "https://github.com/openai/codex/releases/download/rust-v#{version}/codex-x86_64-unknown-linux-musl.tar.gz"
+    binary "codex-x86_64-unknown-linux-musl", target: "codex"
+  end
 
   zap rmdir: "~/.codex"
 end
