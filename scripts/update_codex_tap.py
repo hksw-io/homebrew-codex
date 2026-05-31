@@ -302,19 +302,23 @@ def render_cask(release: ReleaseInfo) -> str:
       sha256 "{release.sha256["arm"]}"
       url "https://github.com/openai/codex/releases/download/rust-v#{{version}}/{release.asset_names["arm"]}"
       binary "codex-aarch64-apple-darwin", target: "codex"
+      generate_completions_from_executable "codex-aarch64-apple-darwin", "completion", base_name: "codex"
     else
       sha256 "{release.sha256["intel"]}"
       url "https://github.com/openai/codex/releases/download/rust-v#{{version}}/{release.asset_names["intel"]}"
       binary "codex-x86_64-apple-darwin", target: "codex"
+      generate_completions_from_executable "codex-x86_64-apple-darwin", "completion", base_name: "codex"
     end
   elsif Hardware::CPU.arm?
     sha256 "{release.sha256["arm64_linux"]}"
     url "https://github.com/openai/codex/releases/download/rust-v#{{version}}/{release.asset_names["arm64_linux"]}"
     binary "codex-aarch64-unknown-linux-musl", target: "codex"
+    generate_completions_from_executable "codex-aarch64-unknown-linux-musl", "completion", base_name: "codex"
   else
     sha256 "{release.sha256["x86_64_linux"]}"
     url "https://github.com/openai/codex/releases/download/rust-v#{{version}}/{release.asset_names["x86_64_linux"]}"
     binary "codex-x86_64-unknown-linux-musl", target: "codex"
+    generate_completions_from_executable "codex-x86_64-unknown-linux-musl", "completion", base_name: "codex"
   end
 
   zap rmdir: "~/.codex"

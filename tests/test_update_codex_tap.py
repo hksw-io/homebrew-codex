@@ -97,6 +97,7 @@ class ReleaseParsingTests(unittest.TestCase):
         self.assertIn('cask "codex"', content)
         self.assertIn("(?:-alpha\\.\\d+)?", content)
         self.assertIn("strategy :github_releases", content)
+        self.assertIn('generate_completions_from_executable', content)
         self.assertNotIn("conflicts_with", content)
 
     def test_render_cask_uses_unsigned_macos_asset_urls_when_selected(self) -> None:
