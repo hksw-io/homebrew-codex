@@ -48,6 +48,7 @@ class ReleaseInfo:
     prerelease: bool
     published_at: str
     html_url: str
+    asset_names: dict[str, str]
     sha256: dict[str, str]
 
     @property
@@ -167,13 +168,15 @@ def release_from_api(item: dict[str, Any]) -> ReleaseInfo:
     if not tag_name.startswith("rust-v"):
         raise ValueError(f"Unexpected upstream tag format: {tag_name}")
 
+    selected_asset_names: dict[str, str] = {}
     asset_digests: dict[str, str] = {}
-    for key, asset_names in REQUIRED_ASSETS.items():
-        asset = next((candidate for candidate in item["assets"] if candidate["name"] in asset_names), None)
+    for key, accepted_asset_names in REQUIRED_ASSETS.items():
+        asset = next((candidate for candidate in item["assets"] if candidate["name"] in accepted_asset_names), None)
         if asset is None:
-            accepted_names = ", ".join(asset_names)
+            accepted_names = ", ".join(accepted_asset_names)
             raise ValueError(f"Release {tag_name} is missing required asset variant for {key}: {accepted_names}")
         asset_name = str(asset["name"])
+        selected_asset_names[key] = asset_name
         digest = str(asset.get("digest", ""))
         if not digest.startswith("sha256:"):
             raise ValueError(f"Release {tag_name} has no sha256 digest for {asset_name}")
@@ -185,6 +188,7 @@ def release_from_api(item: dict[str, Any]) -> ReleaseInfo:
         prerelease=bool(item["prerelease"]),
         published_at=str(item["published_at"]),
         html_url=str(item["html_url"]),
+        asset_names=selected_asset_names,
         sha256=asset_digests,
     )
 
@@ -280,16 +284,7 @@ def select_releases_for_sync(existing_tags: set[str], token: str | None) -> list
 
 def render_cask(release: ReleaseInfo) -> str:
     return f"""cask "{release.cask_token}" do
-  arch arm: "aarch64", intel: "x86_64"
-  os macos: "apple-darwin", linux: "unknown-linux-musl"
-
   version "{release.version}"
-  sha256 arm:          "{release.sha256["arm"]}",
-         intel:        "{release.sha256["intel"]}",
-         arm64_linux:  "{release.sha256["arm64_linux"]}",
-         x86_64_linux: "{release.sha256["x86_64_linux"]}"
-
-  url "https://github.com/openai/codex/releases/download/rust-v#{{version}}/codex-#{{arch}}-#{{os}}.tar.gz"
   name "Codex"
   desc "OpenAI's coding agent that runs in your terminal"
   homepage "https://github.com/openai/codex"
@@ -302,7 +297,25 @@ def render_cask(release: ReleaseInfo) -> str:
 
   depends_on formula: "ripgrep"
 
-  binary "codex-#{{arch}}-#{{os}}", target: "codex"
+  if OS.mac?
+    if Hardware::CPU.arm?
+      sha256 "{release.sha256["arm"]}"
+      url "https://github.com/openai/codex/releases/download/rust-v#{{version}}/{release.asset_names["arm"]}"
+      binary "codex-aarch64-apple-darwin", target: "codex"
+    else
+      sha256 "{release.sha256["intel"]}"
+      url "https://github.com/openai/codex/releases/download/rust-v#{{version}}/{release.asset_names["intel"]}"
+      binary "codex-x86_64-apple-darwin", target: "codex"
+    end
+  elsif Hardware::CPU.arm?
+    sha256 "{release.sha256["arm64_linux"]}"
+    url "https://github.com/openai/codex/releases/download/rust-v#{{version}}/{release.asset_names["arm64_linux"]}"
+    binary "codex-aarch64-unknown-linux-musl", target: "codex"
+  else
+    sha256 "{release.sha256["x86_64_linux"]}"
+    url "https://github.com/openai/codex/releases/download/rust-v#{{version}}/{release.asset_names["x86_64_linux"]}"
+    binary "codex-x86_64-unknown-linux-musl", target: "codex"
+  end
 
   zap rmdir: "~/.codex"
 end
