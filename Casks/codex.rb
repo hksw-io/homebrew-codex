@@ -16,13 +16,13 @@ cask "codex" do
     if Hardware::CPU.arm?
       sha256 "f8e7082cca5d5887eed3ddb9d93b7af8f0ed4bc11b67efd79eab8fb4f5a3b95b"
       url "https://github.com/openai/codex/releases/download/rust-v#{version}/codex-aarch64-apple-darwin-unsigned.tar.gz"
-      binary "codex-aarch64-apple-darwin", target: "codex"
-      generate_completions_from_executable "codex-aarch64-apple-darwin", "completion", base_name: "codex"
+      binary "codex-aarch64-apple-darwin-unsigned", target: "codex"
+      generate_completions_from_executable "codex-aarch64-apple-darwin-unsigned", "completion", base_name: "codex"
     else
       sha256 "66b1a767665ebaf996d08a306011ad8e878b4f0c76a899cf0179bc81802dabab"
       url "https://github.com/openai/codex/releases/download/rust-v#{version}/codex-x86_64-apple-darwin-unsigned.tar.gz"
-      binary "codex-x86_64-apple-darwin", target: "codex"
-      generate_completions_from_executable "codex-x86_64-apple-darwin", "completion", base_name: "codex"
+      binary "codex-x86_64-apple-darwin-unsigned", target: "codex"
+      generate_completions_from_executable "codex-x86_64-apple-darwin-unsigned", "completion", base_name: "codex"
     end
   elsif Hardware::CPU.arm?
     sha256 "d50ea0b63538c1564de3e2470e124c8b6bc382dd39be41988e4f745ca11a41aa"

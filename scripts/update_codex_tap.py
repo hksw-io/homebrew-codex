@@ -67,6 +67,9 @@ class ReleaseInfo:
     def version_key(self) -> tuple[int, int, int, int, int]:
         return version_key(self.version)
 
+    def extracted_binary_name(self, key: str) -> str:
+        return self.asset_names[key].removesuffix(".tar.gz")
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Mirror upstream Codex releases into this tap.")
@@ -301,24 +304,24 @@ def render_cask(release: ReleaseInfo) -> str:
     if Hardware::CPU.arm?
       sha256 "{release.sha256["arm"]}"
       url "https://github.com/openai/codex/releases/download/rust-v#{{version}}/{release.asset_names["arm"]}"
-      binary "codex-aarch64-apple-darwin", target: "codex"
-      generate_completions_from_executable "codex-aarch64-apple-darwin", "completion", base_name: "codex"
+      binary "{release.extracted_binary_name("arm")}", target: "codex"
+      generate_completions_from_executable "{release.extracted_binary_name("arm")}", "completion", base_name: "codex"
     else
       sha256 "{release.sha256["intel"]}"
       url "https://github.com/openai/codex/releases/download/rust-v#{{version}}/{release.asset_names["intel"]}"
-      binary "codex-x86_64-apple-darwin", target: "codex"
-      generate_completions_from_executable "codex-x86_64-apple-darwin", "completion", base_name: "codex"
+      binary "{release.extracted_binary_name("intel")}", target: "codex"
+      generate_completions_from_executable "{release.extracted_binary_name("intel")}", "completion", base_name: "codex"
     end
   elsif Hardware::CPU.arm?
     sha256 "{release.sha256["arm64_linux"]}"
     url "https://github.com/openai/codex/releases/download/rust-v#{{version}}/{release.asset_names["arm64_linux"]}"
-    binary "codex-aarch64-unknown-linux-musl", target: "codex"
-    generate_completions_from_executable "codex-aarch64-unknown-linux-musl", "completion", base_name: "codex"
+    binary "{release.extracted_binary_name("arm64_linux")}", target: "codex"
+    generate_completions_from_executable "{release.extracted_binary_name("arm64_linux")}", "completion", base_name: "codex"
   else
     sha256 "{release.sha256["x86_64_linux"]}"
     url "https://github.com/openai/codex/releases/download/rust-v#{{version}}/{release.asset_names["x86_64_linux"]}"
-    binary "codex-x86_64-unknown-linux-musl", target: "codex"
-    generate_completions_from_executable "codex-x86_64-unknown-linux-musl", "completion", base_name: "codex"
+    binary "{release.extracted_binary_name("x86_64_linux")}", target: "codex"
+    generate_completions_from_executable "{release.extracted_binary_name("x86_64_linux")}", "completion", base_name: "codex"
   end
 
   zap rmdir: "~/.codex"

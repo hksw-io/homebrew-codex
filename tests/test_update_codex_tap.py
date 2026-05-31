@@ -60,6 +60,7 @@ class ReleaseParsingTests(unittest.TestCase):
         self.assertEqual(release.version, "0.136.0-alpha.2")
         self.assertEqual(release.asset_names["arm"], "codex-aarch64-apple-darwin-unsigned.tar.gz")
         self.assertEqual(release.asset_names["intel"], "codex-x86_64-apple-darwin-unsigned.tar.gz")
+        self.assertEqual(release.extracted_binary_name("arm"), "codex-aarch64-apple-darwin-unsigned")
         self.assertEqual(sorted(release.sha256), sorted(updater.REQUIRED_ASSETS))
 
     def test_version_key_orders_stable_after_same_base_alpha(self) -> None:
@@ -115,6 +116,7 @@ class ReleaseParsingTests(unittest.TestCase):
         content = updater.render_cask(updater.release_from_api(release_item))
         self.assertIn("codex-aarch64-apple-darwin-unsigned.tar.gz", content)
         self.assertIn("codex-x86_64-apple-darwin-unsigned.tar.gz", content)
+        self.assertIn('binary "codex-aarch64-apple-darwin-unsigned", target: "codex"', content)
 
     def test_select_releases_for_sync_bootstrap_picks_highest_semver_release(self) -> None:
         first_page = [
