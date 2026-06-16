@@ -1,5 +1,5 @@
 cask "codex" do
-  version "0.141.0-alpha.2"
+  version "0.141.0-alpha.3"
   name "Codex"
   desc "OpenAI's coding agent that runs in your terminal"
   homepage "https://github.com/openai/codex"
@@ -14,23 +14,23 @@ cask "codex" do
 
   if OS.mac?
     if Hardware::CPU.arm?
-      sha256 "edc586506705a6a84d6d88e21fd847c057beefb5b39bc3a303eb067061f36cac"
+      sha256 "b8a20494259a98d3b41894b9062eb4010230318604d21204a499cb55d145fbf8"
       url "https://github.com/openai/codex/releases/download/rust-v#{version}/codex-aarch64-apple-darwin.tar.gz"
       binary "codex-aarch64-apple-darwin", target: "codex"
       generate_completions_from_executable "codex-aarch64-apple-darwin", "completion", base_name: "codex"
     else
-      sha256 "fe52296c97240e80e0794fff5c6b325b06d508cdf05833e00dbf141d2d20d4a8"
+      sha256 "549bf9af8e615e6da27838b97e0d41d7652c1b852f5453bad98565640a409a34"
       url "https://github.com/openai/codex/releases/download/rust-v#{version}/codex-x86_64-apple-darwin.tar.gz"
       binary "codex-x86_64-apple-darwin", target: "codex"
       generate_completions_from_executable "codex-x86_64-apple-darwin", "completion", base_name: "codex"
     end
   elsif Hardware::CPU.arm?
-    sha256 "0cd3ee21d1bb6fa4714e14ec067b0f1f0fc77b0a45bca05cdeecc6764bed5d29"
+    sha256 "a30e6d661bf6846ff5435f62ab9e1f79c95cc2b02bc01580fe8b526ff2fa6d40"
     url "https://github.com/openai/codex/releases/download/rust-v#{version}/codex-aarch64-unknown-linux-musl.tar.gz"
     binary "codex-aarch64-unknown-linux-musl", target: "codex"
     generate_completions_from_executable "codex-aarch64-unknown-linux-musl", "completion", base_name: "codex"
   else
-    sha256 "681081aad99818fb98b6123b3e306c55eddc72f8d9ca62ef3454054720838f39"
+    sha256 "4785a2a1729a8f8ebb18ee18ee9cdfb42a2b6999d1c40a94f1318d105309b8ec"
     url "https://github.com/openai/codex/releases/download/rust-v#{version}/codex-x86_64-unknown-linux-musl.tar.gz"
     binary "codex-x86_64-unknown-linux-musl", target: "codex"
     generate_completions_from_executable "codex-x86_64-unknown-linux-musl", "completion", base_name: "codex"
