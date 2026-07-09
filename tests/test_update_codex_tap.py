@@ -41,27 +41,19 @@ class ReleaseParsingTests(unittest.TestCase):
         self.assertEqual(release.version, "0.113.0-alpha.1")
         self.assertEqual(release.release_type, "prerelease")
         self.assertEqual(release.cask_token, "codex")
-        self.assertEqual(release.asset_names["arm"], "codex-aarch64-apple-darwin.tar.gz")
+        self.assertEqual(release.asset_names["arm"], "codex-package-aarch64-apple-darwin.tar.gz")
         self.assertEqual(sorted(release.sha256), sorted(updater.REQUIRED_ASSETS))
 
-    def test_release_from_api_accepts_unsigned_macos_assets(self) -> None:
+    def test_release_from_api_rejects_bare_assets(self) -> None:
         release_item = self.make_release(
-            tag_name="rust-v0.136.0-alpha.2",
-            prerelease=True,
+            tag_name="rust-v0.144.0",
+            prerelease=False,
             published_at="2026-05-31T01:22:30Z",
         )
-        for asset in release_item["assets"]:
-            if asset["name"] == "codex-aarch64-apple-darwin.tar.gz":
-                asset["name"] = "codex-aarch64-apple-darwin-unsigned.tar.gz"
-            if asset["name"] == "codex-x86_64-apple-darwin.tar.gz":
-                asset["name"] = "codex-x86_64-apple-darwin-unsigned.tar.gz"
+        release_item["assets"][0]["name"] = "codex-aarch64-apple-darwin.tar.gz"
 
-        release = updater.release_from_api(release_item)
-        self.assertEqual(release.version, "0.136.0-alpha.2")
-        self.assertEqual(release.asset_names["arm"], "codex-aarch64-apple-darwin-unsigned.tar.gz")
-        self.assertEqual(release.asset_names["intel"], "codex-x86_64-apple-darwin-unsigned.tar.gz")
-        self.assertEqual(release.extracted_binary_name("arm"), "codex-aarch64-apple-darwin-unsigned")
-        self.assertEqual(sorted(release.sha256), sorted(updater.REQUIRED_ASSETS))
+        with self.assertRaisesRegex(ValueError, "missing required asset variant for arm"):
+            updater.release_from_api(release_item)
 
     def test_version_key_orders_stable_after_same_base_alpha(self) -> None:
         self.assertGreater(
@@ -99,24 +91,22 @@ class ReleaseParsingTests(unittest.TestCase):
         self.assertIn("(?:-alpha\\.\\d+)?", content)
         self.assertIn("strategy :github_releases", content)
         self.assertIn('generate_completions_from_executable', content)
+        self.assertEqual(content.count('binary "bin/codex"'), 1)
+        self.assertEqual(content.count('binary "bin/codex-code-mode-host"'), 1)
         self.assertNotIn("conflicts_with", content)
 
-    def test_render_cask_uses_unsigned_macos_asset_urls_when_selected(self) -> None:
-        release_item = self.make_release(
-            tag_name="rust-v0.136.0-alpha.2",
-            prerelease=True,
-            published_at="2026-05-31T01:22:30Z",
+    def test_render_cask_uses_package_asset_urls(self) -> None:
+        content = updater.render_cask(
+            updater.release_from_api(
+                self.make_release(
+                    tag_name="rust-v0.144.0",
+                    prerelease=False,
+                    published_at="2026-07-09T16:47:12Z",
+                )
+            )
         )
-        for asset in release_item["assets"]:
-            if asset["name"] == "codex-aarch64-apple-darwin.tar.gz":
-                asset["name"] = "codex-aarch64-apple-darwin-unsigned.tar.gz"
-            if asset["name"] == "codex-x86_64-apple-darwin.tar.gz":
-                asset["name"] = "codex-x86_64-apple-darwin-unsigned.tar.gz"
-
-        content = updater.render_cask(updater.release_from_api(release_item))
-        self.assertIn("codex-aarch64-apple-darwin-unsigned.tar.gz", content)
-        self.assertIn("codex-x86_64-apple-darwin-unsigned.tar.gz", content)
-        self.assertIn('binary "codex-aarch64-apple-darwin-unsigned", target: "codex"', content)
+        self.assertIn("codex-package-aarch64-apple-darwin.tar.gz", content)
+        self.assertIn("codex-package-x86_64-apple-darwin.tar.gz", content)
 
     def test_select_releases_for_sync_bootstrap_picks_highest_semver_release(self) -> None:
         first_page = [
