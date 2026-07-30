@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import http.client
+import io
 import os
 import sys
 import unittest
+import urllib.error
 from pathlib import Path
 from unittest import mock
 
@@ -67,6 +70,30 @@ class ReleaseParsingTests(unittest.TestCase):
             updater.version_key("0.113.1"),
         )
 
+    def test_version_key_orders_multi_part_prereleases(self) -> None:
+        self.assertGreater(
+            updater.version_key("0.146.0-alpha.5"),
+            updater.version_key("0.146.0-alpha.3.1"),
+        )
+        self.assertGreater(
+            updater.version_key("0.146.0-alpha.10"),
+            updater.version_key("0.146.0-alpha.9.2"),
+        )
+        self.assertGreater(
+            updater.version_key("0.146.0-alpha.10.1"),
+            updater.version_key("0.146.0-alpha.10"),
+        )
+
+    def test_version_key_supports_semver_prerelease_identifiers(self) -> None:
+        self.assertGreater(
+            updater.version_key("0.147.0-rc.1"),
+            updater.version_key("0.147.0-beta.9"),
+        )
+        self.assertGreater(
+            updater.version_key("0.147.0"),
+            updater.version_key("0.147.0-rc.1"),
+        )
+
     def test_release_outranks_active_uses_semver_precedence(self) -> None:
         release = updater.release_from_api(
             self.make_release(
@@ -88,11 +115,14 @@ class ReleaseParsingTests(unittest.TestCase):
         )
         content = updater.render_cask(release)
         self.assertIn('cask "codex"', content)
-        self.assertIn("(?:-alpha\\.\\d+)?", content)
+        self.assertIn("(?:-[0-9a-z-]+(?:\\.[0-9a-z-]+)*)?", content)
         self.assertIn("strategy :github_releases", content)
+        self.assertIn('arch arm: "aarch64", intel: "x86_64"', content)
+        self.assertIn('os macos: "apple-darwin", linux: "unknown-linux-musl"', content)
         self.assertIn('generate_completions_from_executable', content)
         self.assertEqual(content.count('binary "bin/codex"'), 1)
-        self.assertEqual(content.count('binary "bin/codex-code-mode-host"'), 1)
+        self.assertNotIn('binary "bin/codex-code-mode-host"', content)
+        self.assertNotIn('depends_on formula: "ripgrep"', content)
         self.assertNotIn("conflicts_with", content)
 
     def test_render_cask_uses_package_asset_urls(self) -> None:
@@ -105,8 +135,42 @@ class ReleaseParsingTests(unittest.TestCase):
                 )
             )
         )
-        self.assertIn("codex-package-aarch64-apple-darwin.tar.gz", content)
-        self.assertIn("codex-package-x86_64-apple-darwin.tar.gz", content)
+        self.assertIn("codex-package-#{arch}-#{os}.tar.gz", content)
+
+    def test_fetch_release_page_limits_large_upstream_payloads(self) -> None:
+        with mock.patch.object(updater, "api_request", return_value=[]) as api_request:
+            self.assertEqual(updater.fetch_release_page(3, None), [])
+        api_request.assert_called_once_with(
+            f"/repos/openai/codex/releases?per_page={updater.RELEASES_PER_PAGE}&page=3",
+            None,
+        )
+
+    def test_api_request_retries_gateway_timeout(self) -> None:
+        error = urllib.error.HTTPError(
+            url="https://api.github.com/repos/openai/codex/releases",
+            code=504,
+            msg="Gateway Timeout",
+            hdrs={},
+            fp=io.BytesIO(b"gateway timeout"),
+        )
+        response = mock.MagicMock()
+        response.__enter__.return_value.read.return_value = b"[]"
+
+        with mock.patch("urllib.request.urlopen", side_effect=[error, response]):
+            with mock.patch("time.sleep") as sleep:
+                self.assertEqual(updater.api_request("/repos/openai/codex/releases", None), [])
+        sleep.assert_called_once_with(1)
+
+    def test_api_request_retries_incomplete_response(self) -> None:
+        incomplete = mock.MagicMock()
+        incomplete.__enter__.return_value.read.side_effect = http.client.IncompleteRead(b"", 10)
+        response = mock.MagicMock()
+        response.__enter__.return_value.read.return_value = b"[]"
+
+        with mock.patch("urllib.request.urlopen", side_effect=[incomplete, response]):
+            with mock.patch("time.sleep") as sleep:
+                self.assertEqual(updater.api_request("/repos/openai/codex/releases", None), [])
+        sleep.assert_called_once_with(1)
 
     def test_select_releases_for_sync_bootstrap_picks_highest_semver_release(self) -> None:
         first_page = [

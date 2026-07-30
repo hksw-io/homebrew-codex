@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import os
 import re
@@ -24,6 +25,8 @@ GH_TOKEN = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
 GIT_USER_NAME = os.environ.get("GIT_USER_NAME")
 GIT_USER_EMAIL = os.environ.get("GIT_USER_EMAIL")
 API_BASE = "https://api.github.com"
+RELEASES_PER_PAGE = 20
+RETRYABLE_HTTP_CODES = {403, 408, 429, 500, 502, 503, 504}
 
 REQUIRED_ASSETS = {
     "arm": ("codex-package-aarch64-apple-darwin.tar.gz",),
@@ -31,8 +34,14 @@ REQUIRED_ASSETS = {
     "arm64_linux": ("codex-package-aarch64-unknown-linux-musl.tar.gz",),
     "x86_64_linux": ("codex-package-x86_64-unknown-linux-musl.tar.gz",),
 }
-VERSION_RE = re.compile(r"^(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)(?:-alpha\.(?P<alpha>\d+))?$")
+VERSION_RE = re.compile(
+    r"^(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)"
+    r"(?:-(?P<prerelease>[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?"
+    r"(?:\+(?P<build>[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$"
+)
 CASK_VERSION_RE = re.compile(r'^\s*version "([^"]+)"', re.MULTILINE)
+PrereleaseIdentifierKey = tuple[int, int, str]
+VersionKey = tuple[int, int, int, int, tuple[PrereleaseIdentifierKey, ...]]
 
 
 @dataclass(frozen=True)
@@ -58,7 +67,7 @@ class ReleaseInfo:
         return REPO_ROOT / "Casks" / "codex.rb"
 
     @property
-    def version_key(self) -> tuple[int, int, int, int, int]:
+    def version_key(self) -> VersionKey:
         return version_key(self.version)
 
 
@@ -115,38 +124,51 @@ def api_request(path: str, token: str | None, method: str = "GET", data: dict[st
     for attempt in range(5):
         request = urllib.request.Request(f"{API_BASE}{path}", headers=headers, method=method, data=body)
         try:
-            with urllib.request.urlopen(request) as response:
+            with urllib.request.urlopen(request, timeout=30) as response:
                 payload = response.read()
+            if not payload:
+                return None
+            return json.loads(payload.decode("utf-8"))
         except urllib.error.HTTPError as exc:
             if exc.code == 422 and path.startswith(f"/repos/{TAP_REPO}/releases"):
                 return {"already_exists": True}
 
-            if exc.code in (403, 429):
-                retry_after = exc.headers.get("Retry-After")
-                reset = exc.headers.get("X-RateLimit-Reset")
-                delay = 60
-                if retry_after:
-                    delay = max(1, int(retry_after))
-                elif reset:
-                    delay = max(1, int(reset) - int(time.time()))
-                elif attempt:
-                    delay = 60 * (attempt + 1)
+            if exc.code in RETRYABLE_HTTP_CODES:
+                retry_after = exc.headers.get("Retry-After") if exc.headers else None
+                reset = exc.headers.get("X-RateLimit-Reset") if exc.headers else None
+                if exc.code in (403, 429):
+                    delay = 60
+                    if retry_after:
+                        delay = max(1, int(retry_after))
+                    elif reset:
+                        delay = max(1, int(reset) - int(time.time()))
+                    elif attempt:
+                        delay = 60 * (attempt + 1)
+                else:
+                    delay = max(1, 2**attempt)
                 time.sleep(delay)
                 last_error = exc
                 continue
 
             details = exc.read().decode("utf-8", errors="replace")
             raise RuntimeError(f"GitHub API request failed: {exc.code} {path}: {details}") from exc
-        else:
-            if not payload:
-                return None
-            return json.loads(payload.decode("utf-8"))
+        except (
+            http.client.IncompleteRead,
+            urllib.error.URLError,
+            TimeoutError,
+            ConnectionError,
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+        ) as exc:
+            time.sleep(max(1, 2**attempt))
+            last_error = exc
+            continue
 
     raise RuntimeError(f"GitHub API request kept failing for {path}") from last_error
 
 
 def fetch_release_page(page: int, token: str | None) -> list[dict[str, Any]]:
-    payload = api_request(f"/repos/{UPSTREAM_REPO}/releases?per_page=100&page={page}", token)
+    payload = api_request(f"/repos/{UPSTREAM_REPO}/releases?per_page={RELEASES_PER_PAGE}&page={page}", token)
     assert isinstance(payload, list)
     releases: list[dict[str, Any]] = []
     for item in payload:
@@ -187,7 +209,7 @@ def release_from_api(item: dict[str, Any]) -> ReleaseInfo:
     )
 
 
-def version_key(version: str) -> tuple[int, int, int, int, int]:
+def version_key(version: str) -> VersionKey:
     match = VERSION_RE.fullmatch(version)
     if match is None:
         raise ValueError(f"Unsupported Codex release version: {version}")
@@ -195,12 +217,21 @@ def version_key(version: str) -> tuple[int, int, int, int, int]:
     major = int(match.group("major"))
     minor = int(match.group("minor"))
     patch = int(match.group("patch"))
-    alpha = match.group("alpha")
+    prerelease = match.group("prerelease")
 
-    if alpha is None:
-        return (major, minor, patch, 1, 0)
+    if prerelease is None:
+        return (major, minor, patch, 1, ())
 
-    return (major, minor, patch, 0, int(alpha))
+    prerelease_key: list[PrereleaseIdentifierKey] = []
+    for identifier in prerelease.split("."):
+        if identifier.isdigit():
+            if len(identifier) > 1 and identifier.startswith("0"):
+                raise ValueError(f"Unsupported Codex release version: {version}")
+            prerelease_key.append((0, int(identifier), ""))
+        else:
+            prerelease_key.append((1, 0, identifier))
+
+    return (major, minor, patch, 0, tuple(prerelease_key))
 
 
 def release_outranks_active(release: ReleaseInfo, active_version: str | None) -> bool:
@@ -227,7 +258,7 @@ def read_active_cask_version() -> str | None:
 def select_releases_for_sync(existing_tags: set[str], token: str | None) -> list[ReleaseInfo]:
     if not existing_tags:
         latest_item: dict[str, Any] | None = None
-        latest_release_key: tuple[int, int, int, int, int] | None = None
+        latest_release_key: VersionKey | None = None
         page = 1
         while True:
             batch = fetch_release_page(page, token)
@@ -278,37 +309,27 @@ def select_releases_for_sync(existing_tags: set[str], token: str | None) -> list
 
 def render_cask(release: ReleaseInfo) -> str:
     return f"""cask "{release.cask_token}" do
+  arch arm: "aarch64", intel: "x86_64"
+  os macos: "apple-darwin", linux: "unknown-linux-musl"
+
   version "{release.version}"
+  sha256 arm:          "{release.sha256["arm"]}",
+         intel:        "{release.sha256["intel"]}",
+         arm64_linux:  "{release.sha256["arm64_linux"]}",
+         x86_64_linux: "{release.sha256["x86_64_linux"]}"
+
+  url "https://github.com/openai/codex/releases/download/rust-v#{{version}}/codex-package-#{{arch}}-#{{os}}.tar.gz"
   name "Codex"
   desc "OpenAI's coding agent that runs in your terminal"
   homepage "https://github.com/openai/codex"
 
   livecheck do
-    url "https://github.com/openai/codex/releases"
-    regex(/^rust-v?(\\d+(?:\\.\\d+)+(?:-alpha\\.\\d+)?)$/i)
+    url :url
+    regex(/^rust-v?(\\d+(?:\\.\\d+)+(?:-[0-9a-z-]+(?:\\.[0-9a-z-]+)*)?(?:\\+[0-9a-z-]+(?:\\.[0-9a-z-]+)*)?)$/i)
     strategy :github_releases
   end
 
-  depends_on formula: "ripgrep"
-
-  if OS.mac?
-    if Hardware::CPU.arm?
-      sha256 "{release.sha256["arm"]}"
-      url "https://github.com/openai/codex/releases/download/rust-v#{{version}}/{release.asset_names["arm"]}"
-    else
-      sha256 "{release.sha256["intel"]}"
-      url "https://github.com/openai/codex/releases/download/rust-v#{{version}}/{release.asset_names["intel"]}"
-    end
-  elsif Hardware::CPU.arm?
-    sha256 "{release.sha256["arm64_linux"]}"
-    url "https://github.com/openai/codex/releases/download/rust-v#{{version}}/{release.asset_names["arm64_linux"]}"
-  else
-    sha256 "{release.sha256["x86_64_linux"]}"
-    url "https://github.com/openai/codex/releases/download/rust-v#{{version}}/{release.asset_names["x86_64_linux"]}"
-  end
-
   binary "bin/codex"
-  binary "bin/codex-code-mode-host"
   generate_completions_from_executable "bin/codex", "completion"
 
   zap rmdir: "~/.codex"

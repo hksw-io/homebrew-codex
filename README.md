@@ -7,9 +7,9 @@ Community-maintained Homebrew tap that tracks the latest upstream Codex release,
 The official Homebrew `codex` cask is a good default if you only want stable releases. This tap exists for two cases:
 
 - upstream is moving quickly and you want a dedicated mirror that checks for new releases every 5 minutes
-- you want the highest upstream release by version, including alpha releases that the official cask does not publish
+- you want the highest upstream release by version, including prereleases that the official cask does not publish
 
-The official Homebrew cask tracks stable `rust-v...` releases only. This tap tracks the highest upstream `rust-v...` version by SemVer precedence, whether that release is stable or a prerelease such as `rust-v0.113.0-alpha.1`.
+The official Homebrew cask tracks stable `rust-v...` releases only. This tap tracks the highest upstream `rust-v...` version by SemVer precedence, whether that release is stable or a prerelease such as `rust-v0.146.0-alpha.9.2`.
 
 ## Install
 
@@ -46,6 +46,7 @@ Examples:
 - `0.113.0` supersedes `0.113.0-alpha.2`
 - `0.114.0-alpha.1` supersedes `0.113.1`
 - `0.114.0` supersedes `0.114.0-alpha.1`
+- `0.146.0-alpha.10.1` supersedes `0.146.0-alpha.10`
 
 If you want stable-only behavior, use the official Homebrew `codex` cask instead of this tap.
 
