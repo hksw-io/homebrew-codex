@@ -1,35 +1,25 @@
 cask "codex" do
-  version "0.146.0-alpha.5"
+  arch arm: "aarch64", intel: "x86_64"
+  os macos: "apple-darwin", linux: "unknown-linux-musl"
+
+  version "0.146.0-alpha.6"
+  sha256 arm:          "d7f976ba0585a3d791ebcda65f0de97a934662fb89c437eae1b4c3aaa17592ba",
+         intel:        "3939f35696f1b0a42e6996ebf4b483b5657637fe9f851b165c4667e6dc0e114b",
+         arm64_linux:  "3ac3ae4ba745491038459c160b92c91292d8dc2f51da5ef26f123c188ec18869",
+         x86_64_linux: "4034e7b153dbe944d8773d4669c5659fc5d61fde64a5fa567858a9c8f836c971"
+
+  url "https://github.com/openai/codex/releases/download/rust-v#{version}/codex-package-#{arch}-#{os}.tar.gz"
   name "Codex"
   desc "OpenAI's coding agent that runs in your terminal"
   homepage "https://github.com/openai/codex"
 
   livecheck do
-    url "https://github.com/openai/codex/releases"
-    regex(/^rust-v?(\d+(?:\.\d+)+(?:-alpha\.\d+)?)$/i)
+    url :url
+    regex(/^rust-v?(\d+(?:\.\d+)+(?:-[0-9a-z-]+(?:\.[0-9a-z-]+)*)?(?:\+[0-9a-z-]+(?:\.[0-9a-z-]+)*)?)$/i)
     strategy :github_releases
   end
 
-  depends_on formula: "ripgrep"
-
-  if OS.mac?
-    if Hardware::CPU.arm?
-      sha256 "506a6c331e44c07a5f6b876de8fd0c34a43378deb36b9b8d2da7b5ff8faf9b5b"
-      url "https://github.com/openai/codex/releases/download/rust-v#{version}/codex-package-aarch64-apple-darwin.tar.gz"
-    else
-      sha256 "8441d4aed5c82d9b83d8d079f671801f7bb8da393ad694af9621952a3a4c880f"
-      url "https://github.com/openai/codex/releases/download/rust-v#{version}/codex-package-x86_64-apple-darwin.tar.gz"
-    end
-  elsif Hardware::CPU.arm?
-    sha256 "cf91655cdcf6e03a12172360e7daae0c702a2c9f5f30a044d59c6071584e7057"
-    url "https://github.com/openai/codex/releases/download/rust-v#{version}/codex-package-aarch64-unknown-linux-musl.tar.gz"
-  else
-    sha256 "f0f6d04d93a5f073954d1389868aad48ff6abacb8b435838a2c0d16b2864d19d"
-    url "https://github.com/openai/codex/releases/download/rust-v#{version}/codex-package-x86_64-unknown-linux-musl.tar.gz"
-  end
-
   binary "bin/codex"
-  binary "bin/codex-code-mode-host"
   generate_completions_from_executable "bin/codex", "completion"
 
   zap rmdir: "~/.codex"
