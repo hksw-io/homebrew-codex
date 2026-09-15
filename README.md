@@ -90,6 +90,8 @@ Run the updater once:
 ./scripts/run_update.sh --dry-run --verbose
 ```
 
+Dry runs read the local checkout and upstream metadata without refreshing or modifying the Git repository.
+
 The updater mirrors every upstream `rust-v...` release, but only changes `codex.rb` when that release outranks the currently active version.
 
 Run the tests:
