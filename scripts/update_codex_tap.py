@@ -29,10 +29,10 @@ RELEASES_PER_PAGE = 20
 RETRYABLE_HTTP_CODES = {403, 408, 429, 500, 502, 503, 504}
 
 REQUIRED_ASSETS = {
-    "arm": ("codex-package-aarch64-apple-darwin.tar.gz",),
-    "intel": ("codex-package-x86_64-apple-darwin.tar.gz",),
-    "arm64_linux": ("codex-package-aarch64-unknown-linux-musl.tar.gz",),
-    "x86_64_linux": ("codex-package-x86_64-unknown-linux-musl.tar.gz",),
+    "arm": ("codex-package-aarch64-apple-darwin.tar.gz", "codex-package-aarch64-apple-darwin.tar.zst"),
+    "intel": ("codex-package-x86_64-apple-darwin.tar.gz", "codex-package-x86_64-apple-darwin.tar.zst"),
+    "arm64_linux": ("codex-package-aarch64-unknown-linux-musl.tar.gz", "codex-package-aarch64-unknown-linux-musl.tar.zst"),
+    "x86_64_linux": ("codex-package-x86_64-unknown-linux-musl.tar.gz", "codex-package-x86_64-unknown-linux-musl.tar.zst"),
 }
 VERSION_RE = re.compile(
     r"^(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)"
@@ -94,6 +94,7 @@ def git(
         text=True,
         capture_output=capture_output,
         env=process_env,
+        timeout=120,
     )
 
 
@@ -187,7 +188,8 @@ def release_from_api(item: dict[str, Any]) -> ReleaseInfo:
     selected_asset_names: dict[str, str] = {}
     asset_digests: dict[str, str] = {}
     for key, accepted_asset_names in REQUIRED_ASSETS.items():
-        asset = next((candidate for candidate in item["assets"] if candidate["name"] in accepted_asset_names), None)
+        assets_by_name = {candidate["name"]: candidate for candidate in item["assets"]}
+        asset = next((assets_by_name[name] for name in accepted_asset_names if name in assets_by_name), None)
         if asset is None:
             accepted_names = ", ".join(accepted_asset_names)
             raise ValueError(f"Release {tag_name} is missing required asset variant for {key}: {accepted_names}")
@@ -308,6 +310,22 @@ def select_releases_for_sync(existing_tags: set[str], token: str | None) -> list
 
 
 def render_cask(release: ReleaseInfo) -> str:
+    if all(name.endswith(".tar.gz") for name in release.asset_names.values()):
+        asset_url = '  url "https://github.com/openai/codex/releases/download/rust-v#{version}/codex-package-#{arch}-#{os}.tar.gz"'
+    else:
+        asset_url = "\n".join([
+            "  if OS.mac?",
+            "    if Hardware::CPU.arm?",
+            f'      url "https://github.com/openai/codex/releases/download/rust-v#{{version}}/{release.asset_names["arm"]}"',
+            "    else",
+            f'      url "https://github.com/openai/codex/releases/download/rust-v#{{version}}/{release.asset_names["intel"]}"',
+            "    end",
+            "  elsif Hardware::CPU.arm?",
+            f'    url "https://github.com/openai/codex/releases/download/rust-v#{{version}}/{release.asset_names["arm64_linux"]}"',
+            "  else",
+            f'    url "https://github.com/openai/codex/releases/download/rust-v#{{version}}/{release.asset_names["x86_64_linux"]}"',
+            "  end",
+        ])
     return f"""cask "{release.cask_token}" do
   arch arm: "aarch64", intel: "x86_64"
   os macos: "apple-darwin", linux: "unknown-linux-musl"
@@ -318,7 +336,7 @@ def render_cask(release: ReleaseInfo) -> str:
          arm64_linux:  "{release.sha256["arm64_linux"]}",
          x86_64_linux: "{release.sha256["x86_64_linux"]}"
 
-  url "https://github.com/openai/codex/releases/download/rust-v#{{version}}/codex-package-#{{arch}}-#{{os}}.tar.gz"
+{asset_url}
   name "Codex"
   desc "OpenAI's coding agent that runs in your terminal"
   homepage "https://github.com/openai/codex"

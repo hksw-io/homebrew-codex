@@ -58,6 +58,23 @@ class ReleaseParsingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "missing required asset variant for arm"):
             updater.release_from_api(release_item)
 
+    def test_mixed_archive_formats_use_matching_urls_and_digests(self) -> None:
+        item = self.make_release(tag_name="rust-v0.155.0-alpha.17", prerelease=True,
+                                 published_at="2026-09-01T00:00:00Z")
+        item["assets"][0]["name"] = updater.REQUIRED_ASSETS["arm"][1]
+        release = updater.release_from_api(item)
+        content = updater.render_cask(release)
+        self.assertIn("codex-package-aarch64-apple-darwin.tar.zst", content)
+        self.assertIn("codex-package-x86_64-apple-darwin.tar.gz", content)
+        self.assertEqual(release.sha256["arm"], item["assets"][0]["digest"].removeprefix("sha256:"))
+
+    def test_gzip_is_preferred_regardless_of_api_asset_order(self) -> None:
+        item = self.make_release(tag_name="rust-v0.162.0", prerelease=False,
+                                 published_at="2026-10-02T00:00:00Z")
+        item["assets"].insert(0, {"name": updater.REQUIRED_ASSETS["arm"][1], "digest": "sha256:" + "a" * 64})
+        release = updater.release_from_api(item)
+        self.assertEqual(release.asset_names["arm"], updater.REQUIRED_ASSETS["arm"][0])
+
     def test_version_key_orders_stable_after_same_base_alpha(self) -> None:
         self.assertGreater(
             updater.version_key("0.113.0"),
