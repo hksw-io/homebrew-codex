@@ -13,6 +13,7 @@ import time
 import urllib.request
 import urllib.error
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +28,7 @@ GIT_USER_EMAIL = os.environ.get("GIT_USER_EMAIL")
 API_BASE = "https://api.github.com"
 RELEASES_PER_PAGE = 20
 RETRYABLE_HTTP_CODES = {403, 408, 429, 500, 502, 503, 504}
+ASSET_UPLOAD_GRACE_SECONDS = 2 * 60 * 60
 
 REQUIRED_ASSETS = {
     "arm": ("codex-package-aarch64-apple-darwin.tar.gz", "codex-package-aarch64-apple-darwin.tar.zst"),
@@ -42,6 +44,10 @@ VERSION_RE = re.compile(
 CASK_VERSION_RE = re.compile(r'^\s*version "([^"]+)"', re.MULTILINE)
 PrereleaseIdentifierKey = tuple[int, int, str]
 VersionKey = tuple[int, int, int, int, tuple[PrereleaseIdentifierKey, ...]]
+
+
+class MissingReleaseAsset(ValueError):
+    """An upstream release has not published a required archive."""
 
 
 @dataclass(frozen=True)
@@ -192,7 +198,7 @@ def release_from_api(item: dict[str, Any]) -> ReleaseInfo:
         asset = next((assets_by_name[name] for name in accepted_asset_names if name in assets_by_name), None)
         if asset is None:
             accepted_names = ", ".join(accepted_asset_names)
-            raise ValueError(f"Release {tag_name} is missing required asset variant for {key}: {accepted_names}")
+            raise MissingReleaseAsset(f"Release {tag_name} is missing required asset variant for {key}: {accepted_names}")
         asset_name = str(asset["name"])
         selected_asset_names[key] = asset_name
         digest = str(asset.get("digest", ""))
@@ -257,6 +263,22 @@ def read_active_cask_version() -> str | None:
     return version
 
 
+def ready_releases_from_api(items: list[dict[str, Any]]) -> list[ReleaseInfo]:
+    """Return a chronological prefix so incomplete releases cannot be skipped."""
+    ready: list[ReleaseInfo] = []
+    for item in sorted(items, key=lambda item: str(item["published_at"])):
+        try:
+            ready.append(release_from_api(item))
+        except MissingReleaseAsset as exc:
+            published_at = datetime.strptime(str(item["published_at"]), "%Y-%m-%dT%H:%M:%SZ")
+            age_seconds = time.time() - published_at.replace(tzinfo=timezone.utc).timestamp()
+            if age_seconds >= ASSET_UPLOAD_GRACE_SECONDS:
+                raise
+            log(f"Waiting for assets on {item['tag_name']} (published {item['published_at']}): {exc}")
+            break
+    return ready
+
+
 def select_releases_for_sync(existing_tags: set[str], token: str | None) -> list[ReleaseInfo]:
     if not existing_tags:
         latest_item: dict[str, Any] | None = None
@@ -274,7 +296,7 @@ def select_releases_for_sync(existing_tags: set[str], token: str | None) -> list
                     latest_release_key = release_key
             page += 1
 
-        return [release_from_api(latest_item)] if latest_item is not None else []
+        return ready_releases_from_api([latest_item]) if latest_item is not None else []
 
     pending_items: list[dict[str, Any]] = []
     latest_known_published_at: str | None = None
@@ -301,12 +323,11 @@ def select_releases_for_sync(existing_tags: set[str], token: str | None) -> list
         return []
 
     pending = [
-        release_from_api(item)
+        item
         for item in pending_items
         if str(item["published_at"]) > latest_known_published_at
     ]
-    pending.sort(key=lambda release: release.published_at)
-    return pending
+    return ready_releases_from_api(pending)
 
 
 def render_cask(release: ReleaseInfo) -> str:

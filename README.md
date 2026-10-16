@@ -60,6 +60,8 @@ Each mirrored release:
 - creates a GitHub Release in `hksw-io/homebrew-codex`
 - updates `Casks/codex.rb` only if that upstream release becomes the highest version seen so far
 
+Upstream releases can appear before all four platform archives finish uploading. For the first two hours after publication, the updater logs `Waiting for assets on <tag>` and exits successfully, mirroring only ready releases published before that tag. It retries the incomplete release on the next poll and never advances past it. Missing archives at or after the two-hour deadline remain errors so renamed or permanently missing builds still alert. Other validation errors, including missing SHA-256 digests, fail immediately.
+
 ## Run It Yourself
 
 Clone the repo wherever you want to run the mirror:
