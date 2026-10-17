@@ -264,15 +264,35 @@ def read_active_cask_version() -> str | None:
 
 
 def ready_releases_from_api(items: list[dict[str, Any]]) -> list[ReleaseInfo]:
-    """Return a chronological prefix so incomplete releases cannot be skipped."""
+    """Wait for uploads, allowing superseded incomplete prereleases to be skipped."""
     ready: list[ReleaseInfo] = []
-    for item in sorted(items, key=lambda item: str(item["published_at"])):
+    ordered = sorted(items, key=lambda item: str(item["published_at"]))
+    for index, item in enumerate(ordered):
         try:
             ready.append(release_from_api(item))
         except MissingReleaseAsset as exc:
             published_at = datetime.strptime(str(item["published_at"]), "%Y-%m-%dT%H:%M:%SZ")
             age_seconds = time.time() - published_at.replace(tzinfo=timezone.utc).timestamp()
             if age_seconds >= ASSET_UPLOAD_GRACE_SECONDS:
+                successor = None
+                if item["prerelease"]:
+                    blocked_version = version_key(str(item["tag_name"]).removeprefix("rust-v"))
+                    for candidate in ordered[index + 1:]:
+                        if str(candidate["published_at"]) <= str(item["published_at"]):
+                            continue
+                        if version_key(str(candidate["tag_name"]).removeprefix("rust-v")) <= blocked_version:
+                            continue
+                        try:
+                            successor = release_from_api(candidate)
+                        except MissingReleaseAsset:
+                            continue
+                        break
+                if successor is not None:
+                    log(
+                        f"Skipping incomplete prerelease {item['tag_name']}: "
+                        f"superseded by ready release {successor.tag_name}; {exc}"
+                    )
+                    continue
                 raise
             log(f"Waiting for assets on {item['tag_name']} (published {item['published_at']}): {exc}")
             break

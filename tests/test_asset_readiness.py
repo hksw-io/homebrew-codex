@@ -75,11 +75,52 @@ class AssetReadinessTests(unittest.TestCase):
                         self.assertEqual(updater.ready_releases_from_api([item]), [])
 
     def test_missing_archives_fail_at_two_hours_and_after(self) -> None:
+        self.newer["assets"] = []
         for age_seconds in (7200, 7201, 86400):
             with self.subTest(age_seconds=age_seconds):
                 self.clock.return_value = self.published_timestamp + age_seconds
                 with self.assertRaisesRegex(updater.MissingReleaseAsset, "missing required asset variant for arm"):
                     self.select({self.known["tag_name"]})
+
+    def test_expired_incomplete_prerelease_is_skipped_for_ready_successor(self) -> None:
+        self.clock.return_value = self.published_timestamp + 7200
+        with mock.patch.object(updater, "log") as log:
+            ready = self.select({self.known["tag_name"]})
+        self.assertEqual([release.tag_name for release in ready], [
+            self.older["tag_name"], self.newer["tag_name"],
+        ])
+        self.assertIn("Skipping incomplete prerelease rust-v0.163.0-alpha.3", log.call_args.args[0])
+        self.assertIn("superseded by ready release rust-v0.163.0-alpha.4", log.call_args.args[0])
+
+        tags = {self.known["tag_name"], self.older["tag_name"], self.newer["tag_name"]}
+        self.assertEqual(self.select(tags), [])
+
+    def test_incomplete_stable_release_still_fails_with_ready_successor(self) -> None:
+        self.clock.return_value = self.published_timestamp + 7200
+        self.incomplete["prerelease"] = False
+        self.incomplete["tag_name"] = "rust-v0.163.0"
+        self.newer["tag_name"] = "rust-v0.164.0-alpha.1"
+        with self.assertRaises(updater.MissingReleaseAsset):
+            self.select({self.known["tag_name"]})
+
+    def test_successor_must_be_higher_version_and_published_later(self) -> None:
+        self.clock.return_value = self.published_timestamp + 7200
+        for version, published_at in (
+            ("0.162.0", self.newer["published_at"]),
+            ("0.163.0-alpha.3+build.2", self.newer["published_at"]),
+            ("0.164.0", self.incomplete["published_at"]),
+            ("0.164.0", self.older["published_at"]),
+        ):
+            with self.subTest(version=version, published_at=published_at):
+                successor = self.make_release(version, published_at)
+                with self.assertRaises(updater.MissingReleaseAsset):
+                    updater.ready_releases_from_api([self.incomplete, successor])
+
+    def test_successor_with_missing_digest_still_fails(self) -> None:
+        self.clock.return_value = self.published_timestamp + 7200
+        self.newer["assets"][0].pop("digest")
+        with self.assertRaisesRegex(ValueError, "no sha256 digest"):
+            self.select({self.known["tag_name"]})
 
     def test_recent_release_with_missing_digest_still_fails(self) -> None:
         item = self.make_release("0.163.0-alpha.3", "2026-10-16T09:30:00Z")
@@ -101,6 +142,7 @@ class AssetReadinessTests(unittest.TestCase):
                 self.assertEqual(updater.select_releases_for_sync(set(), None), [])
 
     def test_main_waits_successfully_then_errors_at_deadline(self) -> None:
+        self.newer["assets"] = []
         for age_seconds, expected_exit in ((7199, 0), (7200, 1)):
             with self.subTest(age_seconds=age_seconds):
                 self.clock.return_value = self.published_timestamp + age_seconds

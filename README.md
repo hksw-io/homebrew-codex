@@ -60,7 +60,7 @@ Each mirrored release:
 - creates a GitHub Release in `hksw-io/homebrew-codex`
 - updates `Casks/codex.rb` only if that upstream release becomes the highest version seen so far
 
-Upstream releases can appear before all four platform archives finish uploading. For the first two hours after publication, the updater logs `Waiting for assets on <tag>` and exits successfully, mirroring only ready releases published before that tag. It retries the incomplete release on the next poll and never advances past it. Missing archives at or after the two-hour deadline remain errors so renamed or permanently missing builds still alert. Other validation errors, including missing SHA-256 digests, fail immediately.
+Upstream releases can appear before all four platform archives finish uploading. For the first two hours after publication, the updater logs `Waiting for assets on <tag>` and exits successfully, mirroring only ready releases published before that tag. It retries the incomplete release on the next poll. After two hours, an incomplete prerelease is skipped only if a later-published, higher version has all four required archives and SHA-256 digests. This lets the tap recover from abandoned prerelease builds without publishing broken casks. Once the newer release is mirrored, the skipped prerelease is no longer retried. Incomplete stable releases and incomplete prereleases without a ready successor remain errors. Other validation errors, including missing SHA-256 digests, fail immediately.
 
 ## Run It Yourself
 
