@@ -2,23 +2,13 @@ cask "codex" do
   arch arm: "aarch64", intel: "x86_64"
   os macos: "apple-darwin", linux: "unknown-linux-musl"
 
-  version "0.171.0-alpha.12"
-  sha256 arm:          "c6c819490d9fd81a2cad0171348825218b8ada046f9760eac51969bde28e674d",
-         intel:        "26a8ed27dfdd8cb3d2f7cda45497798c214aa28ffadaf87f13e569281c856f10",
-         arm64_linux:  "d520ea2cf859996cea5aea7a4e19e3afa50464671b68cb8cf63cb35fb7866b06",
-         x86_64_linux: "7d567e96462f1e215f637a108f8b29cadba6be37241a9be7d14d1668da118e05"
+  version "0.171.0-alpha.13"
+  sha256 arm:          "7fe43a1f4e774ddcab04da803d0411587fdb23b105e3f43e538788841cc9c104",
+         intel:        "34cdaa4e7c2351f308356383f1d37b75df55de1fdefca83eb126ae920be230a6",
+         arm64_linux:  "a1cff9df90784974bed7fe468b83d8ffefd91f6f030efe324a6c8dfb2b5ac0b5",
+         x86_64_linux: "1887b68a11238013ed357e0c458ae7370c3a406338226fc24810a90e598a1b65"
 
-  if OS.mac?
-    if Hardware::CPU.arm?
-      url "https://github.com/openai/codex/releases/download/rust-v#{version}/codex-package-aarch64-apple-darwin.tar.gz"
-    else
-      url "https://github.com/openai/codex/releases/download/rust-v#{version}/codex-package-x86_64-apple-darwin.tar.gz"
-    end
-  elsif Hardware::CPU.arm?
-    url "https://github.com/openai/codex/releases/download/rust-v#{version}/codex-package-aarch64-unknown-linux-musl.tar.gz"
-  else
-    url "https://github.com/openai/codex/releases/download/rust-v#{version}/codex-package-x86_64-unknown-linux-musl.tar.zst"
-  end
+  url "https://github.com/openai/codex/releases/download/rust-v#{version}/codex-package-#{arch}-#{os}.tar.gz"
   name "Codex"
   desc "OpenAI's coding agent that runs in your terminal"
   homepage "https://github.com/openai/codex"
